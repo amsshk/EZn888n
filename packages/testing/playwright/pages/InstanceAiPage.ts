@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { BasePage } from './BasePage';
+import { hoverToReveal } from '../utils/retry-utils';
 import { CredentialModal } from './components/CredentialModal';
 import { InstanceAiSidebar } from './components/InstanceAiSidebar';
 import { InstanceAiWorkflowSetup } from './components/InstanceAiWorkflowSetup';
@@ -29,7 +30,7 @@ export class InstanceAiPage extends BasePage {
 		await this.getChatInput()
 			.waitFor({ state: 'visible', timeout: 10_000 })
 			.catch(async () => {
-				const aiMenuItem = this.page.getByRole('menuitem', { name: 'AI Assistant' });
+				const aiMenuItem = this.page.getByRole('menuitem', { name: 'n8n Assistant' });
 				await aiMenuItem.click({ timeout: 10_000 });
 				await this.enableInstanceAiIfPrompted();
 			});
@@ -53,7 +54,7 @@ export class InstanceAiPage extends BasePage {
 	}
 
 	getOnboardingWizard(): Locator {
-		return this.page.getByRole('dialog', { name: 'Set up AI Assistant' });
+		return this.page.getByRole('dialog', { name: 'Set up n8n Assistant' });
 	}
 
 	getWizardPrimaryButton(): Locator {
@@ -74,7 +75,7 @@ export class InstanceAiPage extends BasePage {
 
 	getOnboardingDoneHeading(): Locator {
 		return this.getOnboardingWizard().getByRole('heading', {
-			name: 'AI Assistant is on for everyone on this instance',
+			name: 'n8n Assistant is on for everyone on this instance',
 		});
 	}
 
@@ -87,14 +88,14 @@ export class InstanceAiPage extends BasePage {
 	}
 
 	async enableInstanceAiIfPrompted(): Promise<void> {
-		const dialog = this.page.getByRole('dialog').filter({ hasText: 'Try AI Assistant' });
+		const dialog = this.page.getByRole('dialog').filter({ hasText: 'Try new n8n Assistant' });
 		try {
 			await dialog.waitFor({ state: 'visible', timeout: 3_000 });
 		} catch {
 			return;
 		}
 
-		await dialog.getByRole('button', { name: /Enable AI Assistant on this instance/ }).click();
+		await dialog.getByRole('button', { name: /Enable n8n Assistant on this instance/ }).click();
 		await dialog.getByRole('button', { name: /^(Continue|Enable)$/ }).click();
 		await dialog.waitFor({ state: 'hidden' });
 	}
@@ -415,9 +416,14 @@ export class InstanceAiPage extends BasePage {
 		return this.getPreviewNodeByName(nodeName).getByRole('button', { name: 'Execute step' });
 	}
 
+	/**
+	 * The "Execute step" toolbar button only renders once the AI build has
+	 * finished, and mid-stream canvas re-renders can dismiss an open toolbar,
+	 * so reveal it with a re-hovering poll.
+	 */
 	async executePreviewNodeByName(nodeName: string): Promise<void> {
 		const executeNodeButton = this.getPreviewExecuteNodeButton(nodeName);
-		await executeNodeButton.waitFor({ state: 'visible', timeout: 5_000 });
+		await hoverToReveal(this.getPreviewNodeByName(nodeName), executeNodeButton);
 		await executeNodeButton.dispatchEvent('click');
 	}
 

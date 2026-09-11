@@ -11,10 +11,11 @@ import {
 } from '@/features/agents/constants';
 import { useAgentSessionLangSmithExport } from '@/features/agents/composables/useAgentSessionLangSmithExport';
 import { useThreadTitle } from '@/features/agents/utils/thread-title';
-import type {
-	AgentExecution,
-	AgentExecutionThread,
-	ThreadDetail,
+import {
+	defaultAgentSessionFilters,
+	type AgentExecution,
+	type AgentExecutionThread,
+	type ThreadDetail,
 } from '@/features/agents/composables/useAgentThreadsApi';
 import AgentSessionTimelineHeader from '@/features/agents/components/AgentSessionTimelineHeader.vue';
 import AgentSessionTimelinePanel from '@/features/agents/components/AgentSessionTimelinePanel.vue';
@@ -70,12 +71,7 @@ const {
 
 const triggerSource = computed((): string | null => {
 	if (executions.value.length === 0) return null;
-	const first = executions.value[0];
-
-	/** Relabel InstanceAI to AI Assistant for the UI */
-	if (first.source === 'instance-ai') return 'AI Assistant';
-
-	return first.source ?? 'chat';
+	return executions.value[0].source ?? 'chat';
 });
 
 const triggerIcon = computed((): IconName => {
@@ -85,7 +81,7 @@ const triggerIcon = computed((): IconName => {
 	switch (source) {
 		case 'slack':
 			return 'slack';
-		case 'AI Assistant':
+		case 'instance-ai':
 			return 'sparkles';
 		default:
 			return 'bolt-filled';
@@ -97,6 +93,10 @@ const triggerLabel = computed((): string => {
 	if (!source) return '';
 	if (source === 'chat' || source === 'n8n_chat') {
 		return i18n.baseText('agentSessions.origin.preview');
+	}
+	// Instance AI runs are labelled with the product name, not the source id.
+	if (source === 'instance-ai') {
+		return i18n.baseText('agentSessions.origin.instanceAi');
 	}
 	return source.charAt(0).toUpperCase() + source.slice(1);
 });
@@ -198,7 +198,9 @@ watch(
 			const [loadedAgent] = await Promise.all([
 				getAgent(rootStore.restApiContext, nextProjectId, nextAgentId),
 				fetchConfig(nextProjectId, nextAgentId),
-				sessionsStore.fetchThreads(nextProjectId, nextAgentId),
+				sessionsStore.fetchThreads(nextProjectId, nextAgentId, {
+					filters: defaultAgentSessionFilters(),
+				}),
 			]);
 			if (requestId === previewLoadRequestId) agent.value = loadedAgent;
 		} finally {
@@ -261,6 +263,11 @@ function onSessionSelect(nextThreadId: string) {
 	});
 }
 
+function onSessionDeleted(sessionId: string) {
+	if (sessionId !== threadId.value) return;
+	void router.replace(agentExecutionsRoute.value);
+}
+
 function togglePreview() {
 	isPreviewOpen.value = !isPreviewOpen.value;
 }
@@ -316,6 +323,7 @@ function viewPreviewTrace() {
 				:effective-session-id="effectiveSessionId"
 				@view-trace="viewPreviewTrace"
 				@new-session="onNewChat"
+				@session-deleted="onSessionDeleted"
 				@session-select="onSessionPick"
 				@close="togglePreview"
 			/>
@@ -342,12 +350,6 @@ function viewPreviewTrace() {
 
 	&.previewOpen {
 		padding-right: var(--agent-preview-chat-column-width, 30rem);
-	}
-
-	&.previewOpen:has([data-preview-layout='floating']),
-	&.previewOpen:has([data-preview-layout='fullpage']) {
-		padding-right: 0;
-		transition: none;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
