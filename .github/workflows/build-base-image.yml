@@ -22,6 +22,7 @@ on:
 
 jobs:
   build:
+    if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
